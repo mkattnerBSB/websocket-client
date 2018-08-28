@@ -152,6 +152,7 @@ class ABNF(object):
             data = ""
         self.data = data
         self.get_mask_key = os.urandom
+        self.use_zero_mask = 1 # if 1 -> no XOR and the mask will be b'\x00\x00\x00\x00'
 
     def validate(self, skip_utf8_validation=False):
         """
@@ -235,18 +236,31 @@ class ABNF(object):
             frame_header = six.b(frame_header)
             frame_header += struct.pack("!Q", length)
 
+
         if not self.mask:
             return frame_header + self.data
+        elif bool(self.use_zero_mask):
+          #  import time
+         #   t1 = time.time()
+            mask_key = b'\x00\x00\x00\x00'
+            if isinstance(mask_key, six.text_type):
+                mask_key = mask_key.encode('utf-8')
+            data = mask_key + self.data
+        #    t2 = time.time()
+       #     print("DEBUG time with use_zero_mask = 1", t2-t1)
+            return frame_header + data
         else:
             mask_key = self.get_mask_key(4)
-            return frame_header + self._get_masked(mask_key)
+            mask_data = self._get_masked(mask_key)
+            return frame_header + mask_data
+
+
 
     def _get_masked(self, mask_key):
         s = ABNF.mask(mask_key, self.data)
 
         if isinstance(mask_key, six.text_type):
             mask_key = mask_key.encode('utf-8')
-
         return mask_key + s
 
     @staticmethod
@@ -267,6 +281,7 @@ class ABNF(object):
         if isinstance(data, six.text_type):
             data = six.b(data)
 
+  
         if numpy:
             origlen = len(data)
             _mask_key = mask_key[3] << 24 | mask_key[2] << 16 | mask_key[1] << 8 | mask_key[0]
